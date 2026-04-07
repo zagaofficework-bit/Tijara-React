@@ -192,7 +192,7 @@ export default function LoginPage() {
           Login to <span style={{ color: "#1D546D" }}>Tijara</span>
         </h1>
         <p className="text-sm mt-1" style={{ color: "#5F9598" }}>
-          New to eClassify?{" "}
+          New to   ?{" "}
           <a href="/auth/signup" style={{ color: "#1D546D" }} className="font-semibold hover:underline">
             Create an account
           </a>
