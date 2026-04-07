@@ -1,18 +1,16 @@
 import axios from "axios";
 
-
 const apiClient = axios.create({
-    baseURL: "https://www.zagainstitute.com/tijaraa/",
-    headers: {
-        "Content-Type": "application/json"
-    }
-})
+  baseURL: "https://www.zagainstitute.com/tijaraa/public/",
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
 
+apiClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
 
-apiClient.interceptors.request.use((config)=>{
-    const token = localStorage.getItem("token");
-    if(token) config.headers.Authorization = `Bearer ${token}`
-    return config;
-})
-
-export default apiClient();
+export default apiClient;
