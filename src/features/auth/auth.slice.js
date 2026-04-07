@@ -26,6 +26,7 @@ export const loginUser = createAsyncThunk(
       // Save token if exists
       if (res.data?.token) {
         localStorage.setItem("token", res.data.token);
+        
       }
 
       return res.data;

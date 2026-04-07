@@ -3,14 +3,15 @@ import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import AuthLayout from "../Components/AuthLayout";
 import SocialButton from "../Components/Socialbutton";
-import PhoneInput from "../Components/Phoneinput";   // ← ONLY for the phone number field
-import FormInput from "../Components/Forminput";     // ← for ALL text / email / password fields
+import PhoneInput from "../Components/Phoneinput";
+import FormInput from "../Components/Forminput";
 import { loginUser } from "../auth.slice";
+//import { signInWithGoogle } from "../utils/firebaseAuth";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phoneRegex = /^\+\d{7,15}$/;
 
-/* ─── shared UI helpers ─────────────────────────────── */
+/* ─── Shared UI ─────────────────────────────────────────────────────────── */
 
 function PrimaryBtn({ onClick, disabled, children }) {
   return (
@@ -52,7 +53,6 @@ function Spinner() {
   );
 }
 
-/* ─── Label row with optional "Forgot Password?" link ── */
 function FieldLabel({ text, required, onForgot }) {
   return (
     <div className="flex items-center justify-between mb-1.5">
@@ -74,9 +74,167 @@ function FieldLabel({ text, required, onForgot }) {
   );
 }
 
-/* ══════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════════════════════
+   FORGOT PASSWORD MODAL
+   ─ Collects phone or email
+   ─ Calls POST /api/send-phone-otp or POST /api/send-email-otp
+   ─ On success → navigate to /auth/otp with { type, identifier, flow:"forgot" }
+   ══════════════════════════════════════════════════════════════════════════ */
+function ForgotPasswordModal({ onClose, onSuccess }) {
+  const [tab, setTab] = useState("phone"); // "phone" | "email"
+  const [phone, setPhone] = useState({ full: "", raw: "" });
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [apiError, setApiError] = useState("");
+
+  const validate = () => {
+    const errs = {};
+    if (tab === "phone") {
+      if (!phone.full || !phoneRegex.test(phone.full))
+        errs.phone = "Enter a valid mobile number";
+    } else {
+      if (!email || !emailRegex.test(email))
+        errs.email = "Enter a valid email address";
+    }
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleSend = async () => {
+    if (!validate()) return;
+    setApiError("");
+    setLoading(true);
+
+    try {
+      const endpoint =
+        tab === "phone" ? "/api/send-phone-otp" : "/api/send-email-otp";
+      const body =
+        tab === "phone"
+          ? { phoneNumber: phone.full, flow: "forgot-password" }
+          : { email, flow: "forgot-password" };
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setApiError(data.message || "Failed to send OTP. Please try again.");
+        return;
+      }
+
+      // ✅ OTP sent → hand off to OTP page with "forgot" flow marker
+      onSuccess({
+        type: tab,
+        identifier: tab === "phone" ? phone.full : email,
+        flow: "forgot-password",
+      });
+    } catch {
+      setApiError("Network error. Please check your connection.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    /* Backdrop */
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(6,30,41,0.55)", backdropFilter: "blur(4px)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl p-6 shadow-2xl"
+        style={{ background: "#ffffff" }}
+      >
+        {/* Modal header */}
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h2 className="text-lg font-bold" style={{ color: "#061E29" }}>
+              Reset Password
+            </h2>
+            <p className="text-xs mt-0.5" style={{ color: "#5F9598" }}>
+              We'll send an OTP to verify your identity
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition"
+            style={{ color: "#5F9598" }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex rounded-xl p-1 mb-5" style={{ background: "#F3F4F4" }}>
+          {[{ key: "phone", label: "Mobile" }, { key: "email", label: "Email" }].map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => { setTab(key); setErrors({}); setApiError(""); }}
+              className="flex-1 py-2 text-sm rounded-lg transition-all duration-200"
+              style={{
+                background: tab === key ? "#ffffff" : "transparent",
+                color: tab === key ? "#1D546D" : "#5F9598",
+                border: tab === key ? "1px solid #e5e7eb" : "1px solid transparent",
+                fontWeight: tab === key ? 600 : 400,
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Field */}
+        {tab === "phone" ? (
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-1.5" style={{ color: "#061E29" }}>
+              Mobile Number <span className="text-red-400">*</span>
+            </label>
+            <PhoneInput
+              value={phone}
+              onChange={(full, raw) => setPhone({ full, raw })}
+              error={errors.phone}
+            />
+          </div>
+        ) : (
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-1.5" style={{ color: "#061E29" }}>
+              Email Address <span className="text-red-400">*</span>
+            </label>
+            <FormInput
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              error={errors.email}
+              autoComplete="email"
+            />
+          </div>
+        )}
+
+        {/* API-level error */}
+        {apiError && (
+          <p className="text-xs text-red-500 mb-3 -mt-2">{apiError}</p>
+        )}
+
+        <PrimaryBtn onClick={handleSend} disabled={loading}>
+          {loading ? <><Spinner /> Sending OTP…</> : "Send OTP"}
+        </PrimaryBtn>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
    LOGIN PAGE
-   ══════════════════════════════════════════════════════ */
+   ══════════════════════════════════════════════════════════════════════════ */
 export default function LoginPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -94,6 +252,7 @@ export default function LoginPage() {
 
   const [errors, setErrors] = useState({});
   const [socialLoading, setSocialLoading] = useState(null);
+  const [showForgot, setShowForgot] = useState(false);
 
   /* ── Validation ── */
   const validate = () => {
@@ -113,43 +272,25 @@ export default function LoginPage() {
     return Object.keys(errs).length === 0;
   };
 
-  /* ── Submit ── */
+  /* ── Submit (phone / email) ── */
   const handleLogin = async () => {
     if (!validate()) return;
 
     if (mode === "phone") {
-      /**
-       * POST /api/send-phone-otp
-       * Body: { phoneNumber, password }
-       * Backend validates password then issues OTP → navigate to /auth/otp
-       */
       const result = await dispatch(
-        loginUser({
-          phoneNumber: phone.full,
-          password: phonePassword,
-          provider: "phone", // ✅ important for backend
-        })
+        loginUser({ phoneNumber: phone.full, password: phonePassword, provider: "phone" })
       );
-
       if (loginUser.fulfilled.match(result)) {
-        navigate("/"); // ✅ direct to home
+        navigate("/");
       } else {
-        setErrors({
-          phone: result.payload?.message || "Invalid phone or password",
-        });
+        setErrors({ phone: result.payload?.message || "Invalid phone or password" });
       }
-
     } else {
       const result = await dispatch(
-        loginUser({
-          email,
-          password,
-          provider: "email", // ✅ keep this
-        })
+        loginUser({ email, password, provider: "email" })
       );
-
       if (loginUser.fulfilled.match(result)) {
-        navigate("/"); // ✅ direct login
+        navigate("/");
       } else {
         setErrors({
           email: result.payload?.message || "",
@@ -159,17 +300,55 @@ export default function LoginPage() {
     }
   };
 
-  const handleSocial = async (provider) => {
-    setSocialLoading(provider);
+  /* ── Google Sign-In via Firebase popup → POST /api/user-signup ── */
+  const handleGoogle = async () => {
+    setSocialLoading("google");
     try {
-      const result = await dispatch(loginUser({ provider }));
-      if (loginUser.fulfilled.match(result)) navigate("/");
+      // 1. Firebase opens the Google account-picker popup
+      const { idToken } = await signInWithGoogle();
+
+      // 2. Send Firebase id_token to your backend — it verifies with Firebase Admin SDK
+      //    and upserts the user (register if new, login if existing)
+      const res = await fetch("/api/user-signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: "google", idToken }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErrors({ google: data.message || "Google sign-in failed" });
+        return;
+      }
+
+      // 3. Sync your app's token/user into Redux auth state
+      await dispatch(
+        loginUser.fulfilled(
+          { user: data.user, token: data.token },
+          "google-firebase",
+          { provider: "google" }
+        )
+      );
+
+      navigate("/");
+    } catch (err) {
+      // auth/popup-closed-by-user → user just closed the popup, no need to alarm them
+      if (err?.code !== "auth/popup-closed-by-user") {
+        setErrors({ google: err.message || "Google sign-in failed" });
+      }
     } finally {
       setSocialLoading(null);
     }
   };
 
-  /* Reset everything when switching tabs */
+  /* ── Forgot password OTP success ── */
+  const handleForgotSuccess = ({ type, identifier, flow }) => {
+    setShowForgot(false);
+    navigate("/auth/otp", { state: { type, identifier, flow } });
+  };
+
+  /* ── Tab switch ── */
   const switchMode = (tab) => {
     setMode(tab);
     setErrors({});
@@ -182,6 +361,14 @@ export default function LoginPage() {
   /* ── Render ── */
   return (
     <AuthLayout>
+
+      {/* Forgot-password modal */}
+      {showForgot && (
+        <ForgotPasswordModal
+          onClose={() => setShowForgot(false)}
+          onSuccess={handleForgotSuccess}
+        />
+      )}
 
       {/* Header */}
       <div className="mb-7">
@@ -219,16 +406,14 @@ export default function LoginPage() {
         ))}
       </div>
 
-      {/* ══════════════════════════════════════════
-          MOBILE TAB
-          ● PhoneInput  → phone number with country code
-          ● FormInput   → password  (plain text input, NO country selector)
-          Action: POST /api/send-phone-otp → /auth/otp
-         ══════════════════════════════════════════ */}
+      {/* Global Google error */}
+      {errors.google && (
+        <p className="text-xs text-red-500 mb-3 text-center">{errors.google}</p>
+      )}
+
+      {/* ── MOBILE TAB ── */}
       {mode === "phone" && (
         <div className="space-y-4">
-
-          {/* Mobile number — uses PhoneInput (country selector + tel field) */}
           <div>
             <label className="block text-sm font-medium mb-1.5" style={{ color: "#061E29" }}>
               Mobile Number <span className="text-red-400">*</span>
@@ -240,17 +425,12 @@ export default function LoginPage() {
             />
           </div>
 
-          {/* Password — uses FormInput (plain input, type="password") */}
           <div>
             <FieldLabel
               text="Password"
               required
-              onForgot={() => navigate("/auth/forgot-password")}
+              onForgot={() => setShowForgot(true)}
             />
-            {/*
-              ✅ FormInput renders a plain <input type="password">
-              It has NO PhoneInput inside it.
-            */}
             <FormInput
               type="password"
               placeholder="Enter your password"
@@ -262,29 +442,22 @@ export default function LoginPage() {
           </div>
 
           <PrimaryBtn onClick={handleLogin} disabled={loading}>
-            {loading ? <><Spinner /> Sending OTP…</> : "Continue"}
+            {loading ? <><Spinner /> Logging in…</> : "Continue"}
           </PrimaryBtn>
 
           <Divider />
 
           <SocialButton
             provider="google"
-            onClick={() => handleSocial("google")}
+            onClick={handleGoogle}
             loading={socialLoading === "google"}
           />
         </div>
       )}
 
-      {/* ══════════════════════════════════════════
-          EMAIL TAB
-          ● FormInput  → email address  (type="email")
-          ● FormInput  → password       (type="password")
-          Action: POST /api/user-signup → home "/"  (no OTP)
-         ══════════════════════════════════════════ */}
+      {/* ── EMAIL TAB ── */}
       {mode === "email" && (
         <div className="space-y-4">
-
-          {/* Email — plain input, type="email" */}
           <div>
             <label className="block text-sm font-medium mb-1.5" style={{ color: "#061E29" }}>
               Email Address <span className="text-red-400">*</span>
@@ -299,12 +472,11 @@ export default function LoginPage() {
             />
           </div>
 
-          {/* Password — plain input, type="password" */}
           <div>
             <FieldLabel
               text="Password"
               required
-              onForgot={() => navigate("/auth/forgot-password")}
+              onForgot={() => setShowForgot(true)}
             />
             <FormInput
               type="password"
@@ -324,7 +496,7 @@ export default function LoginPage() {
 
           <SocialButton
             provider="google"
-            onClick={() => handleSocial("google")}
+            onClick={handleGoogle}
             loading={socialLoading === "google"}
           />
         </div>

@@ -5,10 +5,13 @@ import AuthLayout from "../Components/AuthLayout";
 import SocialButton from "../Components/Socialbutton";
 import PhoneInput from "../Components/Phoneinput";
 import FormInput from "../Components/Forminput";
-import { sendPhoneOTP, sendEmailOTP } from "../auth.slice";
+import { sendPhoneOTP, sendEmailOTP, loginUser } from "../auth.slice";
+//import { signInWithGoogle } from "../utils/firebaseAuth";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phoneRegex = /^\+\d{7,15}$/;
+
+/* ─── Shared UI ─────────────────────────────────────────────────────────── */
 
 function PrimaryBtn({ onClick, disabled, children }) {
   return (
@@ -49,6 +52,9 @@ function Spinner() {
   );
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   SIGNUP PAGE
+   ══════════════════════════════════════════════════════════════════════════ */
 export default function SignupPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -56,11 +62,11 @@ export default function SignupPage() {
 
   const [mode, setMode] = useState("phone"); // "phone" | "email"
 
-  // Phone state
+  /* Phone state */
   const [phone, setPhone] = useState({ full: "", raw: "" });
   const [phonePassword, setPhonePassword] = useState("");
 
-  // Email state
+  /* Email state */
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -68,14 +74,14 @@ export default function SignupPage() {
   const [errors, setErrors] = useState({});
   const [socialLoading, setSocialLoading] = useState(null);
 
+  /* ── Validation ── */
   const validate = () => {
     const errs = {};
     if (mode === "phone") {
       if (!phone.full || !phoneRegex.test(phone.full))
         errs.phone = "Enter a valid phone number";
-
       if (!phonePassword || phonePassword.length < 6)
-        errs.phonePassword = "Password must be at least 6 characters"; // ✅ ADD THIS
+        errs.phonePassword = "Password must be at least 6 characters";
     } else {
       if (!username.trim() || username.trim().length < 2)
         errs.username = "Username must be at least 2 characters";
@@ -88,19 +94,13 @@ export default function SignupPage() {
     return Object.keys(errs).length === 0;
   };
 
+  /* ── OTP-based signup (phone / email) ── */
   const handleContinue = async () => {
     if (!validate()) return;
 
     if (mode === "phone") {
-      /**
-       * POST /api/send-phone-otp
-       * Body: { phoneNumber: "+91XXXXXXXXXX" }
-       */
       const result = await dispatch(
-        sendPhoneOTP({
-          phoneNumber: phone.full,
-          password: phonePassword, // ✅ ADD THIS
-        })
+        sendPhoneOTP({ phoneNumber: phone.full, password: phonePassword })
       );
       if (sendPhoneOTP.fulfilled.match(result)) {
         navigate("/auth/otp", {
@@ -110,14 +110,6 @@ export default function SignupPage() {
         setErrors({ phone: result.payload?.message || "Failed to send OTP" });
       }
     } else {
-      /**
-       * POST /api/send-email-otp
-       * Body: { email, username, password }
-       * Backend saves pending user & sends OTP.
-       * username + password are forwarded to the OTP page so
-       * verifyEmailOTP({ email, otp, username, password }) can
-       * complete registration after the code is confirmed.
-       */
       const result = await dispatch(sendEmailOTP({ email, username, password }));
       if (sendEmailOTP.fulfilled.match(result)) {
         navigate("/auth/otp", {
@@ -129,18 +121,69 @@ export default function SignupPage() {
     }
   };
 
-  const handleSocial = async (provider) => {
-    setSocialLoading(provider);
+  /* ── Google Sign-In via Firebase popup → POST /api/user-signup ── */
+  const handleGoogle = async () => {
+    setSocialLoading("google");
     try {
-      console.log("Social signup:", provider);
-      // TODO: dispatch(loginUser({ provider })) then handle token/navigate
+      // 1. Firebase opens the Google account-picker popup
+      const { idToken } = await signInWithGoogle();
+
+      // 2. Send Firebase id_token to your backend — upserts user (new or existing)
+      const res = await fetch("/api/user-signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: "google", idToken }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErrors({ google: data.message || "Google sign-in failed" });
+        return;
+      }
+
+      // 3. Sync your app's token/user into Redux auth state
+      await dispatch(
+        loginUser.fulfilled(
+          { user: data.user, token: data.token },
+          "google-firebase",
+          { provider: "google" }
+        )
+      );
+
+      navigate("/");
+    } catch (err) {
+      if (err?.code !== "auth/popup-closed-by-user") {
+        setErrors({ google: err.message || "Google sign-in failed" });
+      }
     } finally {
       setSocialLoading(null);
     }
   };
 
-  const switchMode = (tab) => { setMode(tab); setErrors({}); };
+  /* ── Apple (placeholder — wire similarly to Google when ready) ── */
+  const handleApple = async () => {
+    setSocialLoading("apple");
+    try {
+      // TODO: implement Sign in with Apple using AppleID.auth.signIn()
+      // then POST { provider: "apple", idToken } to /api/user-signup
+      console.warn("Apple sign-in not yet implemented");
+    } finally {
+      setSocialLoading(null);
+    }
+  };
 
+  const switchMode = (tab) => {
+    setMode(tab);
+    setErrors({});
+    setPhone({ full: "", raw: "" });
+    setPhonePassword("");
+    setUsername("");
+    setEmail("");
+    setPassword("");
+  };
+
+  /* ── Render ── */
   return (
     <AuthLayout>
 
@@ -179,40 +222,30 @@ export default function SignupPage() {
         ))}
       </div>
 
-      {/* ─────────────────────────────────────────
-          PHONE TAB
-          Fields  : Phone number
-          Action  : POST /api/send-phone-otp → /auth/otp
-         ───────────────────────────────────────── */}
+      {/* Global Google error */}
+      {errors.google && (
+        <p className="text-xs text-red-500 mb-3 text-center">{errors.google}</p>
+      )}
+
+      {/* ── PHONE TAB ── */}
       {mode === "phone" && (
         <div className="space-y-4">
-
-          {/* Phone */}
           <div>
-            <label
-              className="block text-sm font-medium mb-1.5"
-              style={{ color: "#061E29" }}
-            >
+            <label className="block text-sm font-medium mb-1.5" style={{ color: "#061E29" }}>
               Phone Number <span className="text-red-400">*</span>
             </label>
-
             <PhoneInput
-              key="phone-input"   // ✅ prevents UI bug
+              key="phone-input"
               value={phone}
               onChange={(full, raw) => setPhone({ full, raw })}
               error={errors.phone}
             />
           </div>
 
-          {/* Password */}
           <div>
-            <label
-              className="block text-sm font-medium mb-1.5"
-              style={{ color: "#061E29" }}
-            >
+            <label className="block text-sm font-medium mb-1.5" style={{ color: "#061E29" }}>
               Password <span className="text-red-400">*</span>
             </label>
-
             <FormInput
               type="password"
               placeholder="Min. 6 characters"
@@ -225,13 +258,7 @@ export default function SignupPage() {
           </div>
 
           <PrimaryBtn onClick={handleContinue} disabled={loading}>
-            {loading ? (
-              <>
-                <Spinner /> Sending OTP…
-              </>
-            ) : (
-              "Continue"
-            )}
+            {loading ? <><Spinner /> Sending OTP…</> : "Continue"}
           </PrimaryBtn>
 
           <Divider />
@@ -239,26 +266,21 @@ export default function SignupPage() {
           <div className="grid grid-cols-2 gap-3">
             <SocialButton
               provider="google"
-              onClick={() => handleSocial("google")}
+              onClick={handleGoogle}
               loading={socialLoading === "google"}
             />
             <SocialButton
               provider="apple"
-              onClick={() => handleSocial("apple")}
+              onClick={handleApple}
               loading={socialLoading === "apple"}
             />
           </div>
         </div>
       )}
 
-      {/* ─────────────────────────────────────────
-          EMAIL TAB
-          Fields  : Username · Email · Password
-          Action  : POST /api/send-email-otp → /auth/otp
-         ───────────────────────────────────────── */}
+      {/* ── EMAIL TAB ── */}
       {mode === "email" && (
         <div className="space-y-4">
-
           <FormInput
             label="Username"
             type="text"
@@ -302,7 +324,6 @@ export default function SignupPage() {
           <PrimaryBtn onClick={handleContinue} disabled={loading}>
             {loading ? <><Spinner /> Sending OTP…</> : "Create Account"}
           </PrimaryBtn>
-
         </div>
       )}
 
