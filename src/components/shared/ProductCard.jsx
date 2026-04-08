@@ -13,9 +13,9 @@ export default function ProductCard({ id, image, title, price, location, onAddTo
 
   const handleCart = (e) => {
     e.stopPropagation();
-    setAdded(true);
+    setAdded((prev) => !prev);
     onAddToCart?.(id);
-    setTimeout(() => setAdded(false), 1500);
+    
   };
 
   return (
@@ -34,19 +34,18 @@ export default function ProductCard({ id, image, title, price, location, onAddTo
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
         <button
-          onClick={(e) => { e.stopPropagation(); setLiked((p) => !p); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            setLiked((p) => !p);
+          }}
           aria-label={liked ? "Remove from wishlist" : "Add to wishlist"}
           className="absolute top-3 right-3 w-9 h-9 bg-white/80 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white transition-colors shadow-sm"
         >
-          <span
-            className="material-symbols-outlined text-lg transition-colors"
-            style={{
-              fontVariationSettings: liked ? <i class="fa-solid fa-heart"></i> : <i class="fa-regular fa-heart"></i>,
-              color: liked ? "#ba1a1a" : "#73787b",
-            }}
-          >
-            favorite
-          </span>
+          <i
+            className={`text-lg transition-all ${liked ? "fa-solid fa-heart scale-110" : "fa-regular fa-heart"
+              }`}
+            style={{ color: liked ? "#ba1a1a" : "#73787b" }}
+          />
         </button>
       </div>
 
@@ -73,7 +72,11 @@ export default function ProductCard({ id, image, title, price, location, onAddTo
               : "bg-white text-black hover:bg-white"
             }`}
         >
-          {added ? <i class="fa-regular fa-circle-check"></i> : <i class="fa-solid fa-cart-arrow-down"></i>}
+          {added ? (
+            <i className="fa-regular fa-circle-check" />
+          ) : (
+            <i className="fa-solid fa-cart-arrow-down" />
+          )}
 
           {added ? "Added!" : "Add to Cart"}
         </button>

@@ -40,7 +40,7 @@ export default function HomePage() {
   return (
     <div className="bg-background text-on-surface font-body selection:bg-secondary-container selection:text-on-secondary-container min-h-screen flex flex-col">
       <Navbar />
-
+     
       {/* pt-16 on mobile (navbar = 64px), pt-[128px] on desktop (navbar + subnav ≈ 128px) */}
       <main className="pt-16 md:pt-[128px] flex-1">
         <HeroSection />

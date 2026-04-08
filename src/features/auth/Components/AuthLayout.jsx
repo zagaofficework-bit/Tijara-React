@@ -1,6 +1,13 @@
 export default function AuthLayout({ children }) {
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: "#F3F4F4" }}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{
+        background: "rgba(6, 30, 41, 0.35)", // ↓ reduce opacity
+        backdropFilter: "blur(12px)",       // ↑ stronger blur
+        WebkitBackdropFilter: "blur(12px)",
+      }}
+    >
       <div
         className="w-full max-w-4xl rounded-2xl shadow-xl overflow-hidden flex min-h-[580px]"
         style={{ background: "#ffffff" }}
