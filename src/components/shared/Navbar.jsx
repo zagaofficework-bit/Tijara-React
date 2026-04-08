@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
-import { fetchUser } from "../../features/auth/auth.slice";
+import { fetchUser } from "../../features/auth/services/auth.slice";
 
 const NAV_LINKS = [
   { label: "New Arrivals", href: "/new-arrivals" },

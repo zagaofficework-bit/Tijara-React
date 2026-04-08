@@ -1,6 +1,6 @@
 // src/components/home/FreshlyAddedSection.jsx
 import { useState, useEffect, useRef } from "react";
-import ProductCard from "../../shared/ProductCard";
+import ProductCard from "../../components/shared/ProductCard";
 
 const SEED_PRODUCTS = [
   {

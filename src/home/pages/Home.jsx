@@ -1,13 +1,12 @@
 // src/pages/HomePage.jsx
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import Navbar from "../components/shared/Navbar";
-import Footer from "../components/shared/Footer";
-import HeroSection from "../components/ui/home/HeroSection";
-import CategoriesSection from "../components/ui/home/CategoriesSection";
-import FreshlyAddedSection from "../components/ui/home/FreshlyAddedSection";
-import PromoBanners from "../components/shared/PromoBanners";
-import JobBoardSection from "../components/ui/home/JobBoardSection";
+import Footer from "../../components/shared/Footer";
+import HeroSection from "../../home/components/HeroSection";
+import CategoriesSection from "../../home/components/CategoriesSection";
+import FreshlyAddedSection from "../../home/components/FreshlyAddedSection";
+import PromoBanners from "../../components/shared/PromoBanners";
+import JobBoardSection from "../../home/components/JobBoardSection";
 
 /**
  * Navbar height offsets:
@@ -39,8 +38,7 @@ export default function HomePage() {
 
   return (
     <div className="bg-background text-on-surface font-body selection:bg-secondary-container selection:text-on-secondary-container min-h-screen flex flex-col">
-      <Navbar />
-
+    
       {/* pt-16 on mobile (navbar = 64px), pt-[128px] on desktop (navbar + subnav ≈ 128px) */}
       <main className="pt-16 md:pt-[128px] flex-1">
         <HeroSection />
