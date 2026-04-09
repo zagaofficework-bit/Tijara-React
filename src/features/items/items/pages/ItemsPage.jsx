@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useItems } from "../services/useItems";
-import FilterSidebar from "../../../components/shared/FilterSidebar";
+import FilterSidebar from "../../../../components/shared/FilterSidebar";
 import ItemsGrid from "../components/ItemsGrid";
-import Pagination from "../../../components/shared/Pagination";
-import ActiveFilterTags from "../../../components/shared/ActiveFilterTags";
+import Pagination from "../../../../components/shared/Pagination";
+import ActiveFilterTags from "../../../../components/shared/ActiveFilterTags";
 
 export default function ItemsPage() {
   const {

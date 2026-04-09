@@ -5,8 +5,9 @@ import Home from "../home/pages/Home";
 import SignupPage from "../features/auth/pages/SignupPage"
 import OtpPage from "../features/auth/pages/Otppage";
 import LoginPage from "../features/auth/pages/LoginPage";
-import ItemsPage from "../features/items/pages/ItemsPage"
+import ItemsPage from "../features/items/items/pages/ItemsPage"
 import Navbar from "../components/shared/Navbar";
+import ItemDetailPage from "../features/items/itemDetail/pages/itemDetail";
 
 function App() {
   return (
@@ -21,9 +22,14 @@ function App() {
           <Route path="/auth/login" element={<LoginPage />} />
         </Routes>
         
-      {/* Get Item */}
+      {/* Get Items- panel and filter */}
       <Routes>
         <Route path="/get-item" element={<ItemsPage/>}/>
+      </Routes>
+
+      {/* Item Detail */}
+      <Routes>
+        <Route path="/item/:id" element={<ItemDetailPage />} />
       </Routes>
 
       </BrowserRouter>

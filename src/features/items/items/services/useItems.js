@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { fetchItems, fetchCategories } from "../services/items.api";
+import { fetchItems, fetchCategories } from "./items.api";
 
 const DEFAULT_FILTERS = {
   keyword: "",
