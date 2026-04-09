@@ -1,17 +1,23 @@
+/**
+ * LoginPage.jsx
+ *
+ * Mobile tab : phone + password → POST /api/send-phone-otp → /auth/otp
+ * Email tab  : email + password → POST /api/user-signup { provider:"email" } → /
+ * Google     : Firebase idToken → POST /api/user-signup { provider:"google" } → /
+ */
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import AuthLayout from "../Components/AuthLayout";
-import SocialButton from "../Components/Socialbutton";
-import PhoneInput from "../Components/Phoneinput";
-import FormInput from "../Components/Forminput";
-import { loginUser } from "../auth.slice";
-//import { signInWithGoogle } from "../utils/firebaseAuth";
+import AuthLayout from "../components/AuthLayout";
+import SocialButton from "../components/Socialbutton";
+import PhoneInput from "../components/Phoneinput";
+import FormInput from "../components/Forminput";
+import { loginUser, sendPhoneOTP } from "../services/auth.slice";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phoneRegex = /^\+\d{7,15}$/;
 
-/* ─── Shared UI ─────────────────────────────────────────────────────────── */
+/* ─── UI helpers ──────────────────────────────────────── */
 
 function PrimaryBtn({ onClick, disabled, children }) {
   return (
@@ -23,8 +29,8 @@ function PrimaryBtn({ onClick, disabled, children }) {
                  flex items-center justify-center gap-2 text-sm text-white"
       style={{
         background: disabled ? "#5F9598" : "#1D546D",
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.7 : 1,
+        cursor:     disabled ? "not-allowed" : "pointer",
+        opacity:    disabled ? 0.7 : 1,
       }}
       onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.background = "#061E29"; }}
       onMouseLeave={(e) => { if (!disabled) e.currentTarget.style.background = "#1D546D"; }}
@@ -53,20 +59,29 @@ function Spinner() {
   );
 }
 
+function ApiErrorBanner({ message }) {
+  if (!message) return null;
+  return (
+    <div className="flex items-start gap-2 rounded-xl px-4 py-3 text-sm"
+         style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626" }}>
+      <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <span>{message}</span>
+    </div>
+  );
+}
+
 function FieldLabel({ text, required, onForgot }) {
   return (
     <div className="flex items-center justify-between mb-1.5">
       <label className="block text-sm font-medium" style={{ color: "#061E29" }}>
-        {text}
-        {required && <span className="text-red-400 ml-0.5">*</span>}
+        {text}{required && <span className="text-red-400 ml-0.5">*</span>}
       </label>
       {onForgot && (
-        <button
-          type="button"
-          onClick={onForgot}
-          className="text-xs font-medium hover:underline"
-          style={{ color: "#1D546D" }}
-        >
+        <button type="button" onClick={onForgot}
+          className="text-xs font-medium hover:underline" style={{ color: "#1D546D" }}>
           Forgot Password?
         </button>
       )}
@@ -74,192 +89,34 @@ function FieldLabel({ text, required, onForgot }) {
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   FORGOT PASSWORD MODAL
-   ─ Collects phone or email
-   ─ Calls POST /api/send-phone-otp or POST /api/send-email-otp
-   ─ On success → navigate to /auth/otp with { type, identifier, flow:"forgot" }
-   ══════════════════════════════════════════════════════════════════════════ */
-function ForgotPasswordModal({ onClose, onSuccess }) {
-  const [tab, setTab] = useState("phone"); // "phone" | "email"
-  const [phone, setPhone] = useState({ full: "", raw: "" });
-  const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState({});
-  const [apiError, setApiError] = useState("");
-
-  const validate = () => {
-    const errs = {};
-    if (tab === "phone") {
-      if (!phone.full || !phoneRegex.test(phone.full))
-        errs.phone = "Enter a valid mobile number";
-    } else {
-      if (!email || !emailRegex.test(email))
-        errs.email = "Enter a valid email address";
-    }
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
-
-  const handleSend = async () => {
-    if (!validate()) return;
-    setApiError("");
-    setLoading(true);
-
-    try {
-      const endpoint =
-        tab === "phone" ? "/api/send-phone-otp" : "/api/send-email-otp";
-      const body =
-        tab === "phone"
-          ? { phoneNumber: phone.full, flow: "forgot-password" }
-          : { email, flow: "forgot-password" };
-
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setApiError(data.message || "Failed to send OTP. Please try again.");
-        return;
-      }
-
-      // ✅ OTP sent → hand off to OTP page with "forgot" flow marker
-      onSuccess({
-        type: tab,
-        identifier: tab === "phone" ? phone.full : email,
-        flow: "forgot-password",
-      });
-    } catch {
-      setApiError("Network error. Please check your connection.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    /* Backdrop */
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(6,30,41,0.55)", backdropFilter: "blur(4px)" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        className="w-full max-w-sm rounded-2xl p-6 shadow-2xl"
-        style={{ background: "#ffffff" }}
-      >
-        {/* Modal header */}
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h2 className="text-lg font-bold" style={{ color: "#061E29" }}>
-              Reset Password
-            </h2>
-            <p className="text-xs mt-0.5" style={{ color: "#5F9598" }}>
-              We'll send an OTP to verify your identity
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition"
-            style={{ color: "#5F9598" }}
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex rounded-xl p-1 mb-5" style={{ background: "#F3F4F4" }}>
-          {[{ key: "phone", label: "Mobile" }, { key: "email", label: "Email" }].map(({ key, label }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => { setTab(key); setErrors({}); setApiError(""); }}
-              className="flex-1 py-2 text-sm rounded-lg transition-all duration-200"
-              style={{
-                background: tab === key ? "#ffffff" : "transparent",
-                color: tab === key ? "#1D546D" : "#5F9598",
-                border: tab === key ? "1px solid #e5e7eb" : "1px solid transparent",
-                fontWeight: tab === key ? 600 : 400,
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* Field */}
-        {tab === "phone" ? (
-          <div className="mb-4">
-            <label className="block text-sm font-medium mb-1.5" style={{ color: "#061E29" }}>
-              Mobile Number <span className="text-red-400">*</span>
-            </label>
-            <PhoneInput
-              value={phone}
-              onChange={(full, raw) => setPhone({ full, raw })}
-              error={errors.phone}
-            />
-          </div>
-        ) : (
-          <div className="mb-4">
-            <label className="block text-sm font-medium mb-1.5" style={{ color: "#061E29" }}>
-              Email Address <span className="text-red-400">*</span>
-            </label>
-            <FormInput
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              error={errors.email}
-              autoComplete="email"
-            />
-          </div>
-        )}
-
-        {/* API-level error */}
-        {apiError && (
-          <p className="text-xs text-red-500 mb-3 -mt-2">{apiError}</p>
-        )}
-
-        <PrimaryBtn onClick={handleSend} disabled={loading}>
-          {loading ? <><Spinner /> Sending OTP…</> : "Send OTP"}
-        </PrimaryBtn>
-      </div>
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════
    LOGIN PAGE
-   ══════════════════════════════════════════════════════════════════════════ */
+   ══════════════════════════════════════════════════════ */
 export default function LoginPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { loading } = useSelector((s) => s.auth);
 
-  const [mode, setMode] = useState("phone"); // "phone" | "email"
+  const [mode, setMode] = useState("phone");    // "phone" | "email"
 
   /* Phone tab */
-  const [phone, setPhone] = useState({ full: "", raw: "" });
+  const [phone, setPhone]             = useState({ full: "", raw: "" });
   const [phonePassword, setPhonePass] = useState("");
 
   /* Email tab */
-  const [email, setEmail] = useState("");
+  const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
 
-  const [errors, setErrors] = useState({});
+  const [errors, setErrors]               = useState({});
+  const [apiError, setApiError]           = useState("");
   const [socialLoading, setSocialLoading] = useState(null);
-  const [showForgot, setShowForgot] = useState(false);
 
   /* ── Validation ── */
   const validate = () => {
     const errs = {};
     if (mode === "phone") {
       if (!phone.full || !phoneRegex.test(phone.full))
-        errs.phone = "Enter a valid mobile number";
+        errs.phone = "Enter a valid mobile number with country code";
       if (!phonePassword || phonePassword.length < 6)
         errs.phonePassword = "Password must be at least 6 characters";
     } else {
@@ -272,86 +129,83 @@ export default function LoginPage() {
     return Object.keys(errs).length === 0;
   };
 
-  /* ── Submit (phone / email) ── */
+  /* ── Submit ── */
   const handleLogin = async () => {
+    setApiError("");
     if (!validate()) return;
 
     if (mode === "phone") {
+      /**
+       * POST /api/send-phone-otp
+       * Body: { phoneNumber, password }
+       * Backend validates password then sends OTP.
+       * On success → /auth/otp
+       */
       const result = await dispatch(
-        loginUser({ phoneNumber: phone.full, password: phonePassword, provider: "phone" })
+        sendPhoneOTP({ phoneNumber: phone.full, password: phonePassword })
       );
-      if (loginUser.fulfilled.match(result)) {
-        navigate("/");
-      } else {
-        setErrors({ phone: result.payload?.message || "Invalid phone or password" });
-      }
-    } else {
-      const result = await dispatch(
-        loginUser({ email, password, provider: "email" })
-      );
-      if (loginUser.fulfilled.match(result)) {
-        navigate("/");
-      } else {
-        setErrors({
-          email: result.payload?.message || "",
-          password: result.payload?.message || "Invalid email or password",
+      if (sendPhoneOTP.fulfilled.match(result)) {
+        navigate("/auth/otp", {
+          state: { type: "phone", identifier: phone.full },
         });
+      } else {
+        setApiError(result.payload?.message || "Failed to send OTP. Please try again.");
+      }
+
+    } else {
+      /**
+       * POST /api/user-signup
+       * Body: { provider: "email", email, password }
+       * Direct credential login — no OTP step.
+       * On success → token saved → navigate to "/"
+       */
+      const result = await dispatch(
+        loginUser({ provider: "email", email, password })
+      );
+      if (loginUser.fulfilled.match(result)) {
+        navigate("/");
+      } else {
+        setApiError(result.payload?.message || "Invalid email or password.");
       }
     }
   };
 
-  /* ── Google Sign-In via Firebase popup → POST /api/user-signup ── */
+  /* ── Google ── */
   const handleGoogle = async () => {
     setSocialLoading("google");
+    setApiError("");
     try {
-      // 1. Firebase opens the Google account-picker popup
+      /**
+       * Requires Firebase:  npm install firebase
+       * import { signInWithGoogle } from "../utils/firebaseAuth";
+       * const { idToken } = await signInWithGoogle();
+       *
+       * POST /api/user-signup { provider: "google", idToken }
+       */
+      
+      
+      const { signInWithGoogle } = await import("firebase/auth");
       const { idToken } = await signInWithGoogle();
-
-      // 2. Send Firebase id_token to your backend — it verifies with Firebase Admin SDK
-      //    and upserts the user (register if new, login if existing)
-      const res = await fetch("/api/user-signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: "google", idToken }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setErrors({ google: data.message || "Google sign-in failed" });
-        return;
+      const result = await dispatch(loginUser({ provider: "google", idToken }));
+      if (loginUser.fulfilled.match(result)) {
+        navigate("/");
+      } else {
+        setApiError(result.payload?.message || "Google sign-in failed.");
       }
-
-      // 3. Sync your app's token/user into Redux auth state
-      await dispatch(
-        loginUser.fulfilled(
-          { user: data.user, token: data.token },
-          "google-firebase",
-          { provider: "google" }
-        )
-      );
-
-      navigate("/");
     } catch (err) {
-      // auth/popup-closed-by-user → user just closed the popup, no need to alarm them
       if (err?.code !== "auth/popup-closed-by-user") {
-        setErrors({ google: err.message || "Google sign-in failed" });
+        setApiError(err.message || "Google sign-in failed.");
       }
     } finally {
       setSocialLoading(null);
     }
   };
 
-  /* ── Forgot password OTP success ── */
-  const handleForgotSuccess = ({ type, identifier, flow }) => {
-    setShowForgot(false);
-    navigate("/auth/otp", { state: { type, identifier, flow } });
-  };
-
-  /* ── Tab switch ── */
+  /* ── Switch tab ── */
   const switchMode = (tab) => {
     setMode(tab);
     setErrors({});
+    setApiError("");
     setPhone({ full: "", raw: "" });
     setPhonePass("");
     setEmail("");
@@ -362,24 +216,16 @@ export default function LoginPage() {
   return (
     <AuthLayout>
 
-      {/* Forgot-password modal */}
-      {showForgot && (
-        <ForgotPasswordModal
-          onClose={() => setShowForgot(false)}
-          onSuccess={handleForgotSuccess}
-        />
-      )}
-
       {/* Header */}
-      <div className="mb-7">
+      <div className="mb-6">
         <p className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: "#5F9598" }}>
           Welcome back
         </p>
         <h1 className="text-2xl font-bold" style={{ color: "#061E29" }}>
-          Login to <span style={{ color: "#1D546D" }}>Tijara</span>
+          Login to <span style={{ color: "#1D546D" }}>eClassify</span>
         </h1>
         <p className="text-sm mt-1" style={{ color: "#5F9598" }}>
-          New to   ?{" "}
+          New to eClassify?{" "}
           <a href="/auth/signup" style={{ color: "#1D546D" }} className="font-semibold hover:underline">
             Create an account
           </a>
@@ -387,7 +233,7 @@ export default function LoginPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex rounded-xl p-1 mb-6" style={{ background: "#F3F4F4" }}>
+      <div className="flex rounded-xl p-1 mb-5" style={{ background: "#F3F4F4" }}>
         {[{ key: "phone", label: "Mobile" }, { key: "email", label: "Email" }].map(({ key, label }) => (
           <button
             key={key}
@@ -395,10 +241,10 @@ export default function LoginPage() {
             onClick={() => switchMode(key)}
             className="flex-1 py-2 text-sm rounded-lg transition-all duration-200"
             style={{
-              background: mode === key ? "#ffffff" : "transparent",
-              color: mode === key ? "#1D546D" : "#5F9598",
-              border: mode === key ? "1px solid #e5e7eb" : "1px solid transparent",
-              fontWeight: mode === key ? 600 : 400,
+              background: mode === key ? "#ffffff"           : "transparent",
+              color:      mode === key ? "#1D546D"           : "#5F9598",
+              border:     mode === key ? "1px solid #e5e7eb" : "1px solid transparent",
+              fontWeight: mode === key ? 600                 : 400,
             }}
           >
             {label}
@@ -406,18 +252,27 @@ export default function LoginPage() {
         ))}
       </div>
 
-      {/* Global Google error */}
-      {errors.google && (
-        <p className="text-xs text-red-500 mb-3 text-center">{errors.google}</p>
+      {/* API-level error */}
+      {apiError && (
+        <div className="mb-4">
+          <ApiErrorBanner message={apiError} />
+        </div>
       )}
 
-      {/* ── MOBILE TAB ── */}
+      {/* ══════════════════════════════════════════
+          MOBILE TAB
+          ● PhoneInput  – phone number (country selector)
+          ● FormInput   – password (plain <input type="password">)
+          Action: POST /api/send-phone-otp → /auth/otp
+         ══════════════════════════════════════════ */}
       {mode === "phone" && (
         <div className="space-y-4">
+
           <div>
             <label className="block text-sm font-medium mb-1.5" style={{ color: "#061E29" }}>
               Mobile Number <span className="text-red-400">*</span>
             </label>
+            {/* PhoneInput = country selector + tel input. */}
             <PhoneInput
               value={phone}
               onChange={(full, raw) => setPhone({ full, raw })}
@@ -429,8 +284,9 @@ export default function LoginPage() {
             <FieldLabel
               text="Password"
               required
-              onForgot={() => setShowForgot(true)}
+              onForgot={() => navigate("/auth/forgot-password")}
             />
+            {/* FormInput = plain <input type="password">. No country code. */}
             <FormInput
               type="password"
               placeholder="Enter your password"
@@ -442,7 +298,7 @@ export default function LoginPage() {
           </div>
 
           <PrimaryBtn onClick={handleLogin} disabled={loading}>
-            {loading ? <><Spinner /> Logging in…</> : "Continue"}
+            {loading ? <><Spinner /> Sending OTP…</> : "Continue"}
           </PrimaryBtn>
 
           <Divider />
@@ -455,9 +311,15 @@ export default function LoginPage() {
         </div>
       )}
 
-      {/* ── EMAIL TAB ── */}
+      {/* ══════════════════════════════════════════
+          EMAIL TAB
+          ● FormInput – email    (type="email")
+          ● FormInput – password (type="password")
+          Action: POST /api/user-signup { provider:"email" } → /
+         ══════════════════════════════════════════ */}
       {mode === "email" && (
         <div className="space-y-4">
+
           <div>
             <label className="block text-sm font-medium mb-1.5" style={{ color: "#061E29" }}>
               Email Address <span className="text-red-400">*</span>
@@ -476,7 +338,7 @@ export default function LoginPage() {
             <FieldLabel
               text="Password"
               required
-              onForgot={() => setShowForgot(true)}
+              onForgot={() => navigate("/auth/forgot-password")}
             />
             <FormInput
               type="password"
@@ -505,7 +367,7 @@ export default function LoginPage() {
       {/* Terms */}
       <p className="mt-6 text-center text-xs" style={{ color: "#5F9598" }}>
         By signing in you agree to eClassify's{" "}
-        <a href="/terms" style={{ color: "#1D546D" }} className="hover:underline">Terms of Service</a>
+        <a href="/terms"   style={{ color: "#1D546D" }} className="hover:underline">Terms of Service</a>
         {" "}and{" "}
         <a href="/privacy" style={{ color: "#1D546D" }} className="hover:underline">Privacy Policy</a>
       </p>

@@ -1,17 +1,24 @@
+/**
+ * SignupPage.jsx
+ *
+ * Phone tab : phone number + password → POST /api/send-phone-otp → /auth/otp
+ * Email tab : username + email + password → POST /api/send-email-otp → /auth/otp
+ * Google    : Firebase idToken → POST /api/user-signup { provider:"google", idToken }
+ * Apple     : identityToken   → POST /api/user-signup { provider:"apple", identityToken }
+ */
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import AuthLayout from "../Components/AuthLayout";
-import SocialButton from "../Components/Socialbutton";
-import PhoneInput from "../Components/Phoneinput";
-import FormInput from "../Components/Forminput";
-import { sendPhoneOTP, sendEmailOTP, loginUser } from "../auth.slice";
-//import { signInWithGoogle } from "../utils/firebaseAuth";
+import AuthLayout from "../components/AuthLayout";
+import SocialButton from "../components/Socialbutton";
+import PhoneInput from "../components/Phoneinput";
+import FormInput from "../components/Forminput";
+import { sendPhoneOTP, sendEmailOTP, loginUser } from "../services/auth.slice";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phoneRegex = /^\+\d{7,15}$/;
 
-/* ─── Shared UI ─────────────────────────────────────────────────────────── */
+/* ─── UI helpers ──────────────────────────────────────── */
 
 function PrimaryBtn({ onClick, disabled, children }) {
   return (
@@ -19,11 +26,12 @@ function PrimaryBtn({ onClick, disabled, children }) {
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="w-full py-3.5 font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm text-white"
+      className="w-full py-3.5 font-semibold rounded-xl transition-all duration-200
+                 flex items-center justify-center gap-2 text-sm text-white"
       style={{
         background: disabled ? "#5F9598" : "#1D546D",
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.7 : 1,
+        cursor:     disabled ? "not-allowed" : "pointer",
+        opacity:    disabled ? 0.7 : 1,
       }}
       onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.background = "#061E29"; }}
       onMouseLeave={(e) => { if (!disabled) e.currentTarget.style.background = "#1D546D"; }}
@@ -52,26 +60,41 @@ function Spinner() {
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
+function ApiErrorBanner({ message }) {
+  if (!message) return null;
+  return (
+    <div className="flex items-start gap-2 rounded-xl px-4 py-3 text-sm"
+         style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626" }}>
+      <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <span>{message}</span>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
    SIGNUP PAGE
-   ══════════════════════════════════════════════════════════════════════════ */
+   ══════════════════════════════════════════════════════ */
 export default function SignupPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { loading } = useSelector((s) => s.auth);
 
-  const [mode, setMode] = useState("phone"); // "phone" | "email"
+  const [mode, setMode] = useState("phone");      // "phone" | "email"
 
   /* Phone state */
-  const [phone, setPhone] = useState({ full: "", raw: "" });
-  const [phonePassword, setPhonePassword] = useState("");
+  const [phone, setPhone]                   = useState({ full: "", raw: "" });
+  const [phonePassword, setPhonePassword]   = useState("");
 
   /* Email state */
   const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
 
-  const [errors, setErrors] = useState({});
+  const [errors, setErrors]               = useState({});
+  const [apiError, setApiError]           = useState("");
   const [socialLoading, setSocialLoading] = useState(null);
 
   /* ── Validation ── */
@@ -79,7 +102,7 @@ export default function SignupPage() {
     const errs = {};
     if (mode === "phone") {
       if (!phone.full || !phoneRegex.test(phone.full))
-        errs.phone = "Enter a valid phone number";
+        errs.phone = "Enter a valid phone number with country code";
       if (!phonePassword || phonePassword.length < 6)
         errs.phonePassword = "Password must be at least 6 characters";
     } else {
@@ -94,11 +117,17 @@ export default function SignupPage() {
     return Object.keys(errs).length === 0;
   };
 
-  /* ── OTP-based signup (phone / email) ── */
+  /* ── Submit ── */
   const handleContinue = async () => {
+    setApiError("");
     if (!validate()) return;
 
     if (mode === "phone") {
+      /**
+       * POST /api/send-phone-otp
+       * Body: { phoneNumber, password }
+       * On success → /auth/otp (state: type, identifier)
+       */
       const result = await dispatch(
         sendPhoneOTP({ phoneNumber: phone.full, password: phonePassword })
       );
@@ -107,75 +136,82 @@ export default function SignupPage() {
           state: { type: "phone", identifier: phone.full },
         });
       } else {
-        setErrors({ phone: result.payload?.message || "Failed to send OTP" });
+        setApiError(result.payload?.message || "Failed to send OTP. Please try again.");
       }
+
     } else {
-      const result = await dispatch(sendEmailOTP({ email, username, password }));
+      /**
+       * POST /api/send-email-otp
+       * Body: { email, username, password }
+       * On success → /auth/otp (state carries username + password for verify step)
+       *
+       * The OTP page will call:
+       * POST /api/verify-email-otp  { email, otp, username, password }
+       */
+      const result = await dispatch(
+        sendEmailOTP({ email, username, password })
+      );
       if (sendEmailOTP.fulfilled.match(result)) {
         navigate("/auth/otp", {
           state: { type: "email", identifier: email, username, password },
         });
       } else {
-        setErrors({ email: result.payload?.message || "Failed to send OTP" });
+        setApiError(result.payload?.message || "Failed to send OTP. Please try again.");
       }
     }
   };
 
-  /* ── Google Sign-In via Firebase popup → POST /api/user-signup ── */
+  /* ── Google ── */
   const handleGoogle = async () => {
     setSocialLoading("google");
+    setApiError("");
     try {
-      // 1. Firebase opens the Google account-picker popup
+      /**
+       * Requires Firebase:  npm install firebase
+       * import { signInWithGoogle } from "../utils/firebaseAuth";
+       *
+       * const { idToken } = await signInWithGoogle();
+       *
+       * Then: POST /api/user-signup { provider: "google", idToken }
+       */
+      const { signInWithGoogle } = await import("firebase/auth");
       const { idToken } = await signInWithGoogle();
 
-      // 2. Send Firebase id_token to your backend — upserts user (new or existing)
-      const res = await fetch("/api/user-signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: "google", idToken }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setErrors({ google: data.message || "Google sign-in failed" });
-        return;
+      const result = await dispatch(loginUser({ provider: "google", idToken }));
+      if (loginUser.fulfilled.match(result)) {
+        navigate("/");
+      } else {
+        setApiError(result.payload?.message || "Google sign-in failed.");
       }
-
-      // 3. Sync your app's token/user into Redux auth state
-      await dispatch(
-        loginUser.fulfilled(
-          { user: data.user, token: data.token },
-          "google-firebase",
-          { provider: "google" }
-        )
-      );
-
-      navigate("/");
     } catch (err) {
       if (err?.code !== "auth/popup-closed-by-user") {
-        setErrors({ google: err.message || "Google sign-in failed" });
+        setApiError(err.message || "Google sign-in failed.");
       }
     } finally {
       setSocialLoading(null);
     }
   };
 
-  /* ── Apple (placeholder — wire similarly to Google when ready) ── */
+  /* ── Apple ── */
   const handleApple = async () => {
     setSocialLoading("apple");
+    setApiError("");
     try {
-      // TODO: implement Sign in with Apple using AppleID.auth.signIn()
-      // then POST { provider: "apple", idToken } to /api/user-signup
-      console.warn("Apple sign-in not yet implemented");
+      /**
+       * POST /api/user-signup { provider: "apple", identityToken }
+       * Wire Apple Sign-In SDK here.
+       */
+      setApiError("Apple sign-in coming soon.");
     } finally {
       setSocialLoading(null);
     }
   };
 
+  /* ── Switch tab ── */
   const switchMode = (tab) => {
     setMode(tab);
     setErrors({});
+    setApiError("");
     setPhone({ full: "", raw: "" });
     setPhonePassword("");
     setUsername("");
@@ -188,7 +224,7 @@ export default function SignupPage() {
     <AuthLayout>
 
       {/* Header */}
-      <div className="mb-7">
+      <div className="mb-6">
         <p className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: "#5F9598" }}>
           Begin Your Journey
         </p>
@@ -197,13 +233,13 @@ export default function SignupPage() {
         </h1>
         <p className="text-sm mt-1" style={{ color: "#5F9598" }}>
           {mode === "phone"
-            ? "Enter your phone number to get started"
-            : "Fill in your details to create your account"}
+            ? "Enter your number to get started"
+            : "Fill in your details below"}
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="flex rounded-xl p-1 mb-6" style={{ background: "#F3F4F4" }}>
+      <div className="flex rounded-xl p-1 mb-5" style={{ background: "#F3F4F4" }}>
         {[{ key: "phone", label: "Phone" }, { key: "email", label: "Email" }].map(({ key, label }) => (
           <button
             key={key}
@@ -211,10 +247,10 @@ export default function SignupPage() {
             onClick={() => switchMode(key)}
             className="flex-1 py-2 text-sm rounded-lg transition-all duration-200"
             style={{
-              background: mode === key ? "#ffffff" : "transparent",
-              color: mode === key ? "#1D546D" : "#5F9598",
-              border: mode === key ? "1px solid #e5e7eb" : "1px solid transparent",
-              fontWeight: mode === key ? 600 : 400,
+              background: mode === key ? "#ffffff"           : "transparent",
+              color:      mode === key ? "#1D546D"           : "#5F9598",
+              border:     mode === key ? "1px solid #e5e7eb" : "1px solid transparent",
+              fontWeight: mode === key ? 600                 : 400,
             }}
           >
             {label}
@@ -222,40 +258,43 @@ export default function SignupPage() {
         ))}
       </div>
 
-      {/* Global Google error */}
-      {errors.google && (
-        <p className="text-xs text-red-500 mb-3 text-center">{errors.google}</p>
+      {/* API-level error banner */}
+      {apiError && (
+        <div className="mb-4">
+          <ApiErrorBanner message={apiError} />
+        </div>
       )}
 
-      {/* ── PHONE TAB ── */}
+      {/* ══════════════════════════════════════════
+          PHONE TAB
+          ● PhoneInput  – mobile number (country selector)
+          ● FormInput   – password (plain <input type="password">)
+          Action: POST /api/send-phone-otp → /auth/otp
+         ══════════════════════════════════════════ */}
       {mode === "phone" && (
         <div className="space-y-4">
+
           <div>
             <label className="block text-sm font-medium mb-1.5" style={{ color: "#061E29" }}>
               Phone Number <span className="text-red-400">*</span>
             </label>
             <PhoneInput
-              key="phone-input"
               value={phone}
               onChange={(full, raw) => setPhone({ full, raw })}
               error={errors.phone}
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1.5" style={{ color: "#061E29" }}>
-              Password <span className="text-red-400">*</span>
-            </label>
-            <FormInput
-              type="password"
-              placeholder="Min. 6 characters"
-              value={phonePassword}
-              onChange={(e) => setPhonePassword(e.target.value)}
-              error={errors.phonePassword}
-              required
-              autoComplete="new-password"
-            />
-          </div>
+          <FormInput
+            label="Password"
+            type="password"
+            placeholder="Min. 6 characters"
+            value={phonePassword}
+            onChange={(e) => setPhonePassword(e.target.value)}
+            error={errors.phonePassword}
+            required
+            autoComplete="new-password"
+          />
 
           <PrimaryBtn onClick={handleContinue} disabled={loading}>
             {loading ? <><Spinner /> Sending OTP…</> : "Continue"}
@@ -264,23 +303,22 @@ export default function SignupPage() {
           <Divider />
 
           <div className="grid grid-cols-2 gap-3">
-            <SocialButton
-              provider="google"
-              onClick={handleGoogle}
-              loading={socialLoading === "google"}
-            />
-            <SocialButton
-              provider="apple"
-              onClick={handleApple}
-              loading={socialLoading === "apple"}
-            />
+            <SocialButton provider="google" onClick={handleGoogle} loading={socialLoading === "google"} />
+            <SocialButton provider="apple"  onClick={handleApple}  loading={socialLoading === "apple"}  />
           </div>
         </div>
       )}
 
-      {/* ── EMAIL TAB ── */}
+      {/* ══════════════════════════════════════════
+          EMAIL TAB
+          ● FormInput – username (type="text")
+          ● FormInput – email    (type="email")
+          ● FormInput – password (type="password")
+          Action: POST /api/send-email-otp → /auth/otp
+         ══════════════════════════════════════════ */}
       {mode === "email" && (
         <div className="space-y-4">
+
           <FormInput
             label="Username"
             type="text"
@@ -314,11 +352,11 @@ export default function SignupPage() {
             autoComplete="new-password"
           />
 
-          <p className="text-xs" style={{ color: "#5F9598" }}>
-            By continuing, you agree to our{" "}
-            <a href="/terms" style={{ color: "#1D546D" }} className="hover:underline">Terms of Service</a>
+          <p className="text-xs leading-relaxed" style={{ color: "#5F9598" }}>
+            By continuing you agree to our{" "}
+            <a href="/terms"   style={{ color: "#1D546D" }} className="hover:underline font-medium">Terms of Service</a>
             {" "}and{" "}
-            <a href="/privacy" style={{ color: "#1D546D" }} className="hover:underline">Privacy Policy</a>.
+            <a href="/privacy" style={{ color: "#1D546D" }} className="hover:underline font-medium">Privacy Policy</a>.
           </p>
 
           <PrimaryBtn onClick={handleContinue} disabled={loading}>
@@ -329,7 +367,9 @@ export default function SignupPage() {
 
       <p className="mt-6 text-center text-sm" style={{ color: "#5F9598" }}>
         Already have an account?{" "}
-        <a href="/auth/login" style={{ color: "#1D546D" }} className="font-semibold hover:underline">Log in</a>
+        <a href="/auth/login" style={{ color: "#1D546D" }} className="font-semibold hover:underline">
+          Log in
+        </a>
       </p>
 
     </AuthLayout>
