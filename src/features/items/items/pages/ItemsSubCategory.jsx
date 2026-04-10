@@ -9,7 +9,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import FilterSidebar from "../../../components/shared/FilterSidebar";
+import FilterSidebar from "../../../../components/shared/FilterSidebar"
 import ItemsGrid from "../components/ItemsGrid";
 
 /* ─────────────────────────────────────────────────────────────── */

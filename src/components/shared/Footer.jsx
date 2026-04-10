@@ -1,4 +1,3 @@
-// src/components/Footer.jsx
 import { Link } from "react-router-dom";
 
 const FOOTER_LINKS = {
@@ -80,3 +79,12 @@ export default function Footer() {
     </footer>
   );
 }
+const LABELS = {
+  keyword: "Keyword",
+  category_id: "Category",
+  min_price: "Min price",
+  max_price: "Max price",
+  city: "City",
+  state: "State",
+};
+
