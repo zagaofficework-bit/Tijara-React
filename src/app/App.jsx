@@ -8,6 +8,7 @@ import LoginPage from "../features/auth/pages/LoginPage";
 import ItemsPage from "../features/items/items/pages/ItemsPage"
 import Navbar from "../components/shared/Navbar";
 import ItemDetailPage from "../features/items/itemDetail/pages/itemDetail";
+import ItemsSubCategory from "../features/items/items/pages/ItemsSubCategory";
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
       {/* Get Items- panel and filter */}
       <Routes>
         <Route path="/get-item" element={<ItemsPage/>}/>
+        <Route path="/category/:slug" element={<ItemsSubCategory />} />
       </Routes>
 
       {/* Item Detail */}

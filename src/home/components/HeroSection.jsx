@@ -1,50 +1,106 @@
 // src/components/home/HeroSection.jsx
 import { useNavigate } from "react-router-dom";
 
+// ─────────────────────────────────────────────────────────────────
+// COLOUR TOKENS  (light ecom theme — shared across all components)
+//   brand      #1D546D   deep teal  — CTA buttons, active states
+//   brandLight #EBF4F7   tint       — hover backgrounds
+//   brandMid   #5F9598   accent     — badges, icon highlights
+//   surface    #FFFFFF   card / section bg
+//   surface2   #F7F9FA   page / offset bg
+//   border     #E4EAED   dividers
+//   textHi     #0E1E25   headings, primary text
+//   textLo     #6B8898   muted labels
+// ─────────────────────────────────────────────────────────────────
+
+const FF = "Manrope, sans-serif";
+
 export default function HeroSection() {
   const navigate = useNavigate();
 
   return (
-    <section className="max-w-[1440px] mx-auto px-4 md:px-8 mb-12 md:mb-16">
-      <div className="relative h-[420px] sm:h-[500px] md:h-[600px] rounded-xl overflow-hidden group">
-
+    <section className="w-full px-4 sm:px-6 lg:px-10 pt-4 pb-10 md:pb-14 max-w-[1440px] mx-auto">
+      <div
+        className="relative rounded-2xl overflow-hidden"
+        style={{ minHeight: "clamp(340px, 48vw, 580px)" }}
+      >
         {/* Background image */}
         <img
           src="https://lh3.googleusercontent.com/aida-public/AB6AXuBFv5xhP3iONxaA6Fyg0_bqiKIsJagK1rgApFzqmDp5_Lh7qYjglGsDUb2lev47DslxAYCXhSvwqQp3VMcil2FRVfNQHoWsHah3bE2aW73DwcpIlOzGgWbkedz5aKxX_qK0rD0bL4sdM5GqvoNtpWbKDGjEYbVTjZM9YzdqyME08xN3LU_QR3fjlBONQMzn_naT_7MzwwEJUVSHfHuSrFkBYgf2Mq3OJV7tFGuRbxmhv5oCIICLYmKki225ejVUd6h6z8QKdxpE_zw"
-          alt="Sophisticated modern retail space"
-          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+          alt="QuickHive marketplace"
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{ filter: "brightness(0.45)" }}
         />
 
-        {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-r from-[#061E29]/90 via-[#061E29]/60 to-transparent flex items-center px-6 sm:px-10 md:px-20">
-          <div className="max-w-xl">
-            <span className="inline-block px-3 py-1 bg-tertiary-fixed text-on-tertiary-fixed font-bold text-[10px] uppercase tracking-widest rounded-full mb-4 md:mb-6">
+        {/* Gradient overlay — left-heavy so text is always readable */}
+        <div
+          className="absolute inset-0"
+          style={{ background: "linear-gradient(110deg, rgba(14,30,37,0.92) 0%, rgba(29,84,109,0.70) 50%, rgba(29,84,109,0.15) 100%)" }}
+        />
+
+        {/* Content */}
+        <div className="relative z-10 flex flex-col justify-center h-full px-6 sm:px-10 md:px-16 py-12 md:py-16">
+          <div className="max-w-[520px]">
+
+            {/* Badge */}
+            <span
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold mb-5 md:mb-6"
+              style={{ background: "rgba(95,149,152,0.25)", border: "1px solid rgba(95,149,152,0.5)", color: "#A8D5DA", fontFamily: FF }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-[#A8D5DA]" />
               Featured Marketplace
             </span>
 
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-headline font-extrabold text-white leading-tight mb-4 md:mb-8">
-              Discover the Future{" "}
+            {/* Headline — white on dark overlay = perfect contrast */}
+            <h1
+              className="font-black text-white leading-[1.06] mb-4 md:mb-6"
+              style={{ fontFamily: FF, fontSize: "clamp(1.9rem, 4.5vw, 3.5rem)", letterSpacing: "-0.025em" }}
+            >
+              India's Smartest{" "}
               <br className="hidden sm:block" />
-              of Commerce
+              Buy & Sell{" "}
+              <span style={{ color: "#A8D5DA" }}>Platform</span>
             </h1>
 
-            <p className="text-sm sm:text-base md:text-lg text-white/80 font-body mb-6 md:mb-10 max-w-md">
-              Curated selections from the world's most trusted sellers.
+            {/* Sub text — white/80 on dark = passes contrast */}
+            <p
+              className="mb-7 md:mb-9 leading-relaxed"
+              style={{ color: "rgba(255,255,255,0.78)", fontFamily: FF, fontSize: "clamp(0.875rem, 1.5vw, 1rem)", maxWidth: 400 }}
+            >
+              Cars, property, electronics, jobs and more — all in one place. Trusted by 20,000+ verified sellers.
             </p>
 
-            <div className="flex flex-wrap gap-3 md:gap-4">
+            {/* CTAs */}
+            <div className="flex flex-wrap gap-3">
               <button
-                onClick={() => navigate("/listings")}
-                className="bg-[#30647e] text-white px-5 md:px-8 py-3 md:py-4 rounded-md font-bold text-sm md:text-base shadow-lg hover:-translate-y-0.5 transition-all active:scale-95"
+                onClick={() => navigate("/items")}
+                className="flex items-center gap-2 font-black text-[13px] text-white rounded-xl px-6 py-3 transition-all hover:opacity-90 active:scale-95"
+                style={{ background: "#1D546D", fontFamily: FF }}
               >
-                Explore Collection
+                Browse Listings
+                <i className="fa-solid fa-arrow-right text-[11px]" />
               </button>
               <button
                 onClick={() => navigate("/how-it-works")}
-                className="bg-white/10 backdrop-blur-md border border-white/20 text-white px-5 md:px-8 py-3 md:py-4 rounded-md font-bold text-sm md:text-base hover:bg-white/20 transition-all"
+                className="flex items-center gap-2 font-black text-[13px] rounded-xl px-6 py-3 transition-all hover:bg-white/20 active:scale-95"
+                style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.25)", color: "white", fontFamily: FF }}
               >
                 How it Works
               </button>
+            </div>
+
+            {/* Stats — white text on dark overlay is perfectly readable */}
+            <div className="flex gap-6 md:gap-10 mt-9 flex-wrap">
+              {[
+                { val: "50K+", label: "Active Listings" },
+                { val: "20K+", label: "Verified Sellers" },
+                { val: "14",   label: "Categories" },
+              ].map(({ val, label }) => (
+                <div key={label}>
+                  <p className="text-xl md:text-2xl font-black text-white leading-tight" style={{ fontFamily: FF }}>{val}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-widest mt-0.5" style={{ color: "#A8D5DA", fontFamily: FF }}>{label}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
